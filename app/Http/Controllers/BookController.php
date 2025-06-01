@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Book;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 
 class BookController extends Controller
 {
@@ -11,58 +13,165 @@ class BookController extends Controller
     {
         $books = Book::all();
 
-        if ($books-> isEmpty()){
-            return response() ->json([
+        if ($books->isEmpty()) {
+            return response()->json([
                 "success" => true,
-                "message" => 'Resources data not found!'
+                "message" => "Resource data not found!"
             ], 200);
         }
+
         return response()->json([
-            "succes" => true, 
+            "success" => true,
             "message" => "Get all resources",
             "data" => $books
-        ], 200);
+        ]);
     }
+
     public function store(Request $request)
     {
-        $request->validate(['name' => 'required|string']);
+        // 1. validator
+        $validator = Validator::make($request->all(), [
+            'title' => 'required|string|max:100',
+            'description' => 'required|string',
+            'price' => 'required|numeric',
+            'stock' => 'required|integer',
+            'cover_photo' => 'required|image|mimes:jpeg,jpg,png|max:2048',
+            'genre_id' => 'required|exists:genres,id',
+            'author_id' => 'required|exists:authors,id'
+        ]);
 
-        $books = Book::create(['name' => $request->name]);
-
-        return response()->json($books, 201);
-    }
-
-    public function show($id)
-    {
-        $books = Book::find($id);
-        if (!$books) {
-            return response()->json(['message' => 'Book tidak ditemukan'], 404);
+        // 2. check validator error
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()
+            ], 422);
         }
 
-        return response()->json($books, 200);
+        // 3. upload image
+        $image = $request->file('cover_photo');
+        $image->store('books', 'public');
+
+        // 4. insert data
+        $book = Book::create([
+            'title' => $request->title,
+            'description' => $request->description,
+            'price' => $request->price,
+            'stock' => $request->stock,
+            'cover_photo' => $image->hashName(),
+            'genre_id' => $request->genre_id,
+            'author_id' => $request->author_id,
+        ]);
+
+        // 5. response
+        return response()->json([
+            'success' => true,
+            'message' => 'Resource added successfully!',
+            'data' => $book
+        ], 201);
     }
 
-    public function update(Request $request, $id)
+    public function show(string $id)
     {
-        $books = Book::find($id);
-        if (!$books) {
-            return response()->json(['message' => 'Book tidak ditemukan'], 404);
+        $book = Book::find($id);
+
+        if (!$book) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Resource not found'
+            ], 404);
         }
 
-        $request->validate(['name' => 'required|string']);
-        $books->update(['name' => $request->name]);
-
-        return response()->json(['message' => 'Book berhasil diperbarui', 'data' => $books], 200);
+        return response()->json([
+            'success' => true,
+            'message' => 'Get detail resource',
+            'data' => $book
+        ], 200);
     }
 
-    public function destroy($id)
+    public function update(string $id, Request $request)
     {
-        $books = Book::find($id);
-        if (!$books) {
-            return response()->json(['message' => 'Book tidak ditemukan'], 404);
+        // 1. mencari data
+        $book = Book::find($id);
+
+        if (!$book) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Resource not found'
+            ], 404);
         }
 
-        $books->delete();
-        return response()->json(['message' => 'Book berhasil dihapus'], 200);
+        // 2. validator
+        $validator = Validator::make($request->all(), [
+            'title' => 'required|string|max:100',
+            'description' => 'required|string',
+            'price' => 'required|numeric',
+            'stock' => 'required|integer',
+            'cover_photo' => 'nullable|image|mimes:jpeg,jpg,png|max:2048',
+            'genre_id' => 'required|exists:genres,id',
+            'author_id' => 'required|exists:authors,id'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()
+            ], 422);
+        }
+
+        // 3. siapkan data yang ingin diupdate
+        $data = [
+            'title' => $request->title,
+            'description' => $request->description,
+            'price' => $request->price,
+            'stock' => $request->stock,
+            'genre_id' => $request->genre_id,
+            'author_id' => $request->author_id,
+        ];
+
+        // 4. handle image (upload & delete image)
+        if ($request->hasFile('cover_photo')) {
+            $image = $request->file('cover_photo');
+            $image->store('books', 'public');
+
+            if ($book->cover_photo) {
+                Storage::disk('public')->delete('books/' . $book->cover_photo);
+            }
+
+            $data['cover_photo'] = $image->hashName();
+        }
+
+        // 5. update data baru ke database
+        $book->update($data);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Resource updated successfully!',
+            'data' => $book
+        ], 200);
+    }
+
+    public function destroy(string $id)
+    {
+        $book = Book::find($id);
+
+        if (!$book) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Resource not found'
+            ], 404);
+        }
+
+        if ($book->cover_photo) {
+            // delete from storage
+            Storage::disk('public')->delete('books/' . $book->cover_photo);
+        }
+
+        $book->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Delete resource successfully'
+        ]);
     }
 }

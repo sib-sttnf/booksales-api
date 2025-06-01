@@ -10,221 +10,83 @@ use Illuminate\Support\Facades\DB;
 
 class TransactionController extends Controller
 {
-    // READ ALL - Hanya Admin
     public function index()
     {
-        try {
-            $transactions = Transaction::with(['customer:id,name,email', 'book:id,title,price'])
-                                     ->orderBy('created_at', 'desc')
-                                     ->get();
+        $transactions = Transaction::with('user', 'book')->get();
 
+        if ($transactions->isEmpty()) {
             return response()->json([
-                'success' => true,
-                'message' => 'Data transaksi berhasil diambil',
-                'data' => $transactions
+                "success" => true,
+                "message" => "Resource data not found!"
             ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal mengambil data transaksi',
-                'error' => $e->getMessage()
-            ], 500);
         }
+
+        return response()->json([
+            "success" => true,
+            "message" => "Get all resources",
+            "data" => $transactions
+        ]);
     }
 
-    // CREATE - Customer terautentikasi
     public function store(Request $request)
     {
+        // 1. validator & cek validator
         $validator = Validator::make($request->all(), [
             'book_id' => 'required|exists:books,id',
-            'quantity' => 'required|integer|min:1',
-            'notes' => 'nullable|string|max:255'
+            'quantity' => 'required|integer|min:1'
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validation Error',
-                'errors' => $validator->errors()
+                'message' => 'Validation error',
+                'data' => $validator->errors()
             ], 422);
         }
 
-        try {
-            DB::beginTransaction();
+        // 2. generate orderNumber -> unique | ORD-023948302
+        $uniqueCode = "ORD-" . strtoupper(uniqid());
 
-            $user = auth('api')->user();
-            $book = Book::find($request->book_id);
+        // 3. ambil user yang sedang login & cek login (apakah ada data user?)
+        $user = auth('api')->user();
 
-            // Cek stok
-            if ($book->stock < $request->quantity) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Stok buku tidak mencukupi'
-                ], 400);
-            }
-
-            // Generate order number
-            $orderNumber = 'ORD-' . strtoupper(uniqid());
-
-            // Hitung total
-            $totalAmount = $book->price * $request->quantity;
-
-            // Create transaction
-            $transaction = Transaction::create([
-                'order_number' => $orderNumber,
-                'customer_id' => $user->id,
-                'book_id' => $request->book_id,
-                'quantity' => $request->quantity,
-                'total_amount' => $totalAmount,
-                'notes' => $request->notes
-            ]);
-
-            // Update stok buku
-            $book->decrement('stock', $request->quantity);
-
-            DB::commit();
-
-            // Load relasi untuk response
-            $transaction->load(['customer:id,name,email', 'book:id,title,price']);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Transaksi berhasil dibuat',
-                'data' => $transaction
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
+        if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal membuat transaksi',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Unauthorized!'
+            ], 401);
         }
-    }
 
-    // SHOW - Customer terautentikasi (hanya transaksi milik sendiri)
-    public function show($id)
-    {
-        try {
-            $user = auth('api')->user();
-            
-            $transaction = Transaction::with(['customer:id,name,email', 'book:id,title,price,stock'])
-                                    ->where('id', $id)
-                                    ->where('customer_id', $user->id)
-                                    ->first();
+        // 4. mencari data buku dari request
+        $book = Book::find($request->book_id);
 
-            if (!$transaction) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Transaksi tidak ditemukan atau bukan milik Anda'
-                ], 404);
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Detail transaksi',
-                'data' => $transaction
-            ], 200);
-
-        } catch (\Exception $e) {
+        // 5. cek stok buku
+        if ($book->stock < $request->quantity) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal mengambil detail transaksi',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Stok barang tidak cukup!'
+            ], 400);
         }
-    }
 
-    // UPDATE - Customer terautentikasi (hanya status dan notes)
-    public function update(Request $request, $id)
-    {
-        $validator = Validator::make($request->all(), [
-            'status' => 'sometimes|in:pending,completed,cancelled',
-            'notes' => 'sometimes|string|max:255'
+        // 6. hitung total harga = price * quantity
+        $totalAmount = $book->price * $request->quantity;
+
+        // 7. kurangi stok buku (update)
+        $book->stock -= $request->quantity;
+        $book->save();
+
+        // 8. simpan data transaksi
+        $transactions = Transaction::create([
+            'order_number' => $uniqueCode,
+            'customer_id' => $user->id,
+            'book_id' => $request->book_id,
+            'total_amount' => $totalAmount
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation Error',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        try {
-            $user = auth('api')->user();
-            
-            $transaction = Transaction::where('id', $id)
-                                    ->where('customer_id', $user->id)
-                                    ->first();
-
-            if (!$transaction) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Transaksi tidak ditemukan atau bukan milik Anda'
-                ], 404);
-            }
-
-            // Hanya update field yang diizinkan
-            $transaction->update($request->only(['status', 'notes']));
-            
-            $transaction->load(['customer:id,name,email', 'book:id,title,price']);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Transaksi berhasil diupdate',
-                'data' => $transaction
-            ], 200);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal mengupdate transaksi',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    // DESTROY - Hanya Admin
-    public function destroy($id)
-    {
-        try {
-            DB::beginTransaction();
-
-            $transaction = Transaction::find($id);
-
-            if (!$transaction) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Transaksi tidak ditemukan'
-                ], 404);
-            }
-
-            // Kembalikan stok jika transaksi belum completed
-            if ($transaction->status !== 'completed') {
-                $book = Book::find($transaction->book_id);
-                if ($book) {
-                    $book->increment('stock', $transaction->quantity);
-                }
-            }
-
-            $transaction->delete();
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Transaksi berhasil dihapus'
-            ], 200);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal menghapus transaksi',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Transaction created successfully!',
+            'data' => $transactions
+        ], 201);
     }
 }
