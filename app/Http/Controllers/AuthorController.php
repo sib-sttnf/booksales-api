@@ -11,7 +11,7 @@ class AuthorController extends Controller
 {
     public function index()
     {
-        $author = Author::all();
+        $author = Author::with(['books'])->get();
 
         if ($author->isEmpty()) {
             return response()->json([

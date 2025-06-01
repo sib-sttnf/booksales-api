@@ -11,7 +11,7 @@ class BookController extends Controller
 {
     public function index()
     {
-        $books = Book::all();
+        $books = Book::with(['author', 'genre', 'transactions'])->get();
 
         if ($books->isEmpty()) {
             return response()->json([

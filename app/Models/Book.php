@@ -11,6 +11,8 @@ class Book extends Model
 {
     use HasFactory;
 
+    protected $table = 'books';
+
     // Kolom-kolom yang bisa diisi massal (mass-assignment)
     protected $fillable = [
         'title',

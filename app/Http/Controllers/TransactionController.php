@@ -12,7 +12,7 @@ class TransactionController extends Controller
 {
     public function index()
     {
-        $transactions = Transaction::with('user', 'book')->get();
+        $transactions = Transaction::with('customer', 'book')->get();
 
         if ($transactions->isEmpty()) {
             return response()->json([
