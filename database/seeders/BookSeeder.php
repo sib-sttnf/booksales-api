@@ -2,58 +2,45 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Book;
-use Carbon\Carbon;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Illuminate\Database\Seeder;
 
 class BookSeeder extends Seeder
 {
-    public function run()
+    /**
+     * Run the database seeds.
+     */
+    public function run(): void
     {
         Book::create([
-            'title' => 'Laut Bercerita',
-            'author_id' => 1,
+            'title' => 'Harry Potter and the Sorcerer\'s Stone',
+            'description' => 'An orphaned boy enrolls in a school of wizardry, where he learns the truth about himself, his family and the terrible evil that haunts the magical world.',
+            'price' => 50000,
+            'stock' => 50,
+            'cover_photo' => 'harry_potter.jpg',
             'genre_id' => 1,
-            'price' => 75000.00,
-            'stock' => 10,
-            'cover_photo' => 'laut.jpg',
+            'author_id' => 1,
         ]);
 
         Book::create([
-            'title' => 'Puisi',
-            'author_id' => 2,
+            'title' => 'The Shining',
+            'description' => 'A family heads to an isolated hotel for the winter where an evil and sinister presence influences the father into violence, while his psychic son sees horrific premonitions from both past and future.',
+            'price' => 25000,
+            'stock' => 30,
+            'cover_photo' => 'the_shining.jpg',
             'genre_id' => 2,
-            'price' => 50000.00,
-            'stock' => 15,
-            'cover_photo' => 'puisi.jpg',
-
+            'author_id' => 2,
         ]);
+
         Book::create([
-            'title' => 'Harry Potter',
-            'author_id' => 3,
+            'title' => 'Laskar Pelangi',
+            'description' => 'An inspiring story about the struggle of a group of students and their two teachers in a remote village in Belitung to keep their school alive.',
+            'price' => 40000,
+            'stock' => 75,
+            'cover_photo' => 'laskar_pelangi.jpg',
             'genre_id' => 3,
-            'price' => 90000.00,
-            'stock' => 20,
-            'cover_photo' => 'hp.jpg',
-
-        ]);
-        Book::create([
-            'title' => 'Adventures of Tom Sawyer',
-            'author_id' => 4,
-            'genre_id' => 4,
-            'price' => 65000.00,
-            'stock' => 12,
-            'cover_photo' => 'tom.jpg',
-
-        ]);
-        Book::create([
-            'title' => 'Kafka on the Shore',
-            'author_id' => 5,
-            'genre_id' => 5,
-            'price' => 80000.00,
-            'stock' => 8,
-            'cover_photo' => 'kafka.jpg',
-
+            'author_id' => 3,
         ]);
     }
 }
