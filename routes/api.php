@@ -11,7 +11,6 @@ use Illuminate\Http\Request;
 // 🔐 Route auth
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login',    [AuthController::class, 'login']);
-Route::post('/logout',   [AuthController::class, 'logout']);
 
 // 🔍 Public access (no login)
 Route::apiResource('/books', BookController::class)->only(['index', 'show']);
@@ -22,6 +21,8 @@ Route::get('/authors/{id}',  [AuthorController::class, 'show']);
 
 // 🔐 User authenticated (customer)
 Route::middleware(['auth:api'])->group(function () {
+    Route::post('/logout',   [AuthController::class, 'logout']);
+
     Route::post('/transactions', [TransactionController::class, 'store']);  // ✅ Buat transaksi
     Route::get('/transactions/{id}', [TransactionController::class, 'show']); // ✅ Lihat transaksi pribadi
 });
